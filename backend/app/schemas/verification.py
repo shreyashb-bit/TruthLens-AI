@@ -6,5 +6,6 @@ class VerificationRequest(BaseModel):
 
 
 class VerificationResponse(BaseModel):
-    message: str
+    id: int
+    text: str
     verdict: str
