@@ -9,7 +9,11 @@ router = APIRouter()
 
 @router.get("/history")
 def get_history(db: Session = Depends(get_db)):
-    records = db.query(Verification).all()
+    records = (
+        db.query(Verification)
+        .order_by(Verification.id.desc())
+        .all()
+    )
 
     return {
         "history": [
