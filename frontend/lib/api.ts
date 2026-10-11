@@ -1,4 +1,3 @@
-```ts
 import type {
   ApiResponse,
   VerificationHistoryItem,
@@ -7,242 +6,154 @@ import type {
   VerificationResult,
 } from "@/types/verification";
 
-/**
- * Backend base URL.
- *
- * Set NEXT_PUBLIC_API_URL in frontend/.env.local when the backend
- * runs separately from the Next.js frontend.
- *
- * Example:
- * NEXT_PUBLIC_API_URL=http://localhost:8000
- */
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
+const RESULT_STORAGE_KEY = "truthlens:results";
+const HISTORY_STORAGE_KEY = "truthlens:history";
 
-/**
- * Remove a trailing slash so endpoint construction stays predictable.
- */
-const API_URL = API_BASE_URL.replace(/\/$/, "");
+type BackendVerification = { id: number | string; text: string; verdict: string };
+type BackendHistory = { history?: BackendVerification[] };
 
-/**
- * Default request timeout.
- */
-const DEFAULT_TIMEOUT = 60_000;
-
-/**
- * Error thrown when the backend cannot be reached or returns an error.
- */
 export class ApiError extends Error {
-  status: number;
-  details?: unknown;
-
-  constructor(
-    message: string,
-    status = 500,
-    details?: unknown,
-  ) {
+  constructor(message: string, public status = 500, public details?: unknown) {
     super(message);
-
     this.name = "ApiError";
-    this.status = status;
-    this.details = details;
   }
 }
 
-/**
- * Generic JSON request helper.
- *
- * This is intentionally kept in one place so the individual API
- * functions remain small and easy to replace if Person 3 changes
- * the backend endpoint names.
- */
-async function request<T>(
-  endpoint: string,
-  options: RequestInit = {},
-  timeout = DEFAULT_TIMEOUT,
-): Promise<T> {
-  const controller = new AbortController();
-
-  const timeoutId = window.setTimeout(
-    () => controller.abort(),
-    timeout,
-  );
-
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  let response: Response;
   try {
-    const response = await fetch(`${API_URL}${endpoint}`, {
+    response = await fetch(`${API_URL}${endpoint}`, {
       ...options,
-      signal: controller.signal,
-      headers: {
-        Accept: "application/json",
-        ...options.headers,
-      },
+      headers: { Accept: "application/json", ...options.headers },
+      signal: AbortSignal.timeout(60_000),
     });
-
-    const contentType =
-      response.headers.get("content-type") || "";
-
-    let payload: unknown = null;
-
-    if (contentType.includes("application/json")) {
-      try {
-        payload = await response.json();
-      } catch {
-        payload = null;
-      }
-    } else {
-      try {
-        payload = await response.text();
-      } catch {
-        payload = null;
-      }
-    }
-
-    if (!response.ok) {
-      const message =
-        typeof payload === "object" &&
-        payload !== null &&
-        "message" in payload &&
-        typeof payload.message === "string"
-          ? payload.message
-          : typeof payload === "object" &&
-              payload !== null &&
-              "detail" in payload &&
-              typeof payload.detail === "string"
-            ? payload.detail
-            : `Request failed with status ${response.status}.`;
-
-      throw new ApiError(
-        message,
-        response.status,
-        payload,
-      );
-    }
-
-    return payload as T;
   } catch (error) {
-    if (error instanceof ApiError) {
-      throw error;
-    }
-
-    if (
-      error instanceof DOMException &&
-      error.name === "AbortError"
-    ) {
-      throw new ApiError(
-        "The request timed out. Please try again.",
-        408,
-      );
-    }
-
-    throw new ApiError(
-      "Unable to connect to the verification service. Please try again.",
-      503,
-      error,
-    );
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
-}
-
-/**
- * Normalize an API response that may either be:
- *
- * 1. { success: true, data: ... }
- * 2. { data: ... }
- * 3. the actual object directly
- *
- * This gives the frontend some tolerance while the backend contract
- * is being finalized.
- */
-function unwrapResponse<T>(
-  payload: ApiResponse<T> | T,
-): T {
-  if (
-    typeof payload === "object" &&
-    payload !== null &&
-    "data" in payload &&
-    payload.data !== undefined
-  ) {
-    return payload.data as T;
+    throw new ApiError(error instanceof Error && error.name === "TimeoutError"
+      ? "The request timed out. Please try again."
+      : `Unable to connect to the verification service at ${API_URL}.`, 503, error);
   }
 
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = payload && typeof payload === "object"
+      ? ("detail" in payload && typeof payload.detail === "string" ? payload.detail
+        : "message" in payload && typeof payload.message === "string" ? payload.message : null)
+      : null;
+    throw new ApiError(message || `Request failed with status ${response.status}.`, response.status, payload);
+  }
   return payload as T;
 }
 
-/**
- * Build a FormData object for verification submissions.
- */
-function buildVerificationFormData(
-  requestData: VerificationRequest,
-): FormData {
-  const formData = new FormData();
-
-  formData.append("type", requestData.type);
-
-  if (requestData.text) {
-    formData.append("text", requestData.text);
+function readStoredResults(): VerificationResult[] {
+  try {
+    return JSON.parse(localStorage.getItem(RESULT_STORAGE_KEY) || "[]") as VerificationResult[];
+  } catch {
+    return [];
   }
-
-  if (requestData.url) {
-    formData.append("url", requestData.url);
-  }
-
-  if (requestData.file) {
-    formData.append("file", requestData.file);
-  }
-
-  return formData;
 }
 
-/**
- * Start a verification.
- *
- * IMPORTANT:
- * The endpoint below is the frontend's integration point.
- * If the existing Person 3 backend uses a different route,
- * change this single endpoint rather than modifying components.
- */
-export async function submitVerification(
-  requestData: VerificationRequest,
-): Promise<VerificationJob> {
-  const formData =
-    buildVerificationFormData(requestData);
+function saveResult(result: VerificationResult): void {
+  const results = [result, ...readStoredResults().filter((item) => item.id !== result.id)].slice(0, 100);
+  localStorage.setItem(RESULT_STORAGE_KEY, JSON.stringify(results));
+}
 
-  const response = await request<
-    ApiResponse<VerificationJob> | VerificationJob
-  >("/api/verify", {
-    method: "POST",
-    body: formData,
+function mapVerdict(verdict: string): VerificationResult["verdict"] {
+  const normalized = verdict.toLowerCase().replace(/[ -]/g, "_");
+  if (["true", "mostly_true", "partially_true", "misleading", "false", "unverified", "mixed"].includes(normalized)) {
+    return normalized as VerificationResult["verdict"];
+  }
+  return "unverified";
+}
+
+function toResult(record: BackendVerification, inputType: VerificationRequest["type"]): VerificationResult {
+  const createdAt = new Date().toISOString();
+  return {
+    id: String(record.id),
+    inputType,
+    originalInput: record.text,
+    title: record.text,
+    summary: record.verdict.toLowerCase() === "pending"
+      ? "The backend accepted this claim, but its verification engine returned a pending verdict."
+      : `Backend verdict: ${record.verdict}. Review the evidence before relying on this result.`,
+    verdict: mapVerdict(record.verdict),
+    confidence: 0,
+    claims: [{ id: `${record.id}-claim`, text: record.text, verdict: mapVerdict(record.verdict), confidence: 0 }],
+    evidence: [],
+    sources: [],
+    createdAt,
+  };
+}
+
+/** Uses the existing FastAPI /verify JSON contract for claims and URLs. */
+export async function submitVerification(requestData: VerificationRequest): Promise<VerificationJob> {
+  let record: BackendVerification;
+  let input = requestData.text?.trim() || "";
+
+  if (requestData.type === "text" || requestData.type === "url") {
+    if (requestData.type === "url") input = requestData.url?.trim() || "";
+    if (!input) throw new ApiError("Enter a claim or URL to verify.", 400);
+    record = await request<BackendVerification>("/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: input }),
+    });
+  } else {
+    if (!requestData.file) throw new ApiError("Choose a file to upload.", 400);
+    const form = new FormData();
+    form.append("file", requestData.file);
+    const uploaded = await request<{ filename: string; message: string }>("/upload", { method: "POST", body: form });
+    const id = `upload-${Date.now()}`;
+    record = { id, text: `${uploaded.filename} — ${uploaded.message}`, verdict: "unverified" };
+  }
+
+  const result = toResult(record, requestData.type);
+  saveResult(result);
+  return { id: result.id, status: "completed", progress: 100, result };
+}
+
+export async function getVerification(verificationId: string): Promise<VerificationResult> {
+  const result = readStoredResults().find((item) => item.id === verificationId);
+  if (!result) throw new ApiError("This result is not available in this browser session.", 404);
+  return result;
+}
+
+export async function getVerificationJob(jobId: string): Promise<VerificationJob> {
+  const result = await getVerification(jobId);
+  return { id: result.id, status: "completed", progress: 100, result };
+}
+
+export async function getVerificationHistory(): Promise<VerificationHistoryItem[]> {
+  const payload = await request<BackendHistory | ApiResponse<BackendHistory>>("/history");
+  const wrapped = payload as ApiResponse<BackendHistory>;
+  const data: BackendHistory = wrapped.data ?? payload as BackendHistory;
+  const entries = data.history || [];
+  const results = readStoredResults();
+  const mapped = entries.map((entry) => {
+    const id = String(entry.id);
+    const result = results.find((item) => item.id === id);
+    return {
+      id,
+      inputType: result?.inputType || "text",
+      title: entry.text,
+      preview: entry.text,
+      verdict: mapVerdict(entry.verdict),
+      confidence: result?.confidence || 0,
+      createdAt: result?.createdAt || new Date().toISOString(),
+    } satisfies VerificationHistoryItem;
   });
-
-  return unwrapResponse(response);
+  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(mapped));
+  return mapped;
 }
 
-/**
- * Fetch a completed verification by ID.
- */
-export async function getVerification(
-  verificationId: string,
-): Promise<VerificationResult> {
-  const response = await request<
-    ApiResponse<VerificationResult> | VerificationResult
-  >(
-    `/api/verify/${encodeURIComponent(
-      verificationId,
-    )}`,
-  );
-
-  return unwrapResponse(response);
+export function getLocalVerificationHistory(): VerificationHistoryItem[] {
+  return readStoredResults().map((result) => ({
+    id: result.id,
+    inputType: result.inputType,
+    title: result.title || result.originalInput || "Verification",
+    preview: result.originalInput,
+    verdict: result.verdict,
+    confidence: result.confidence,
+    createdAt: result.createdAt,
+  }));
 }
-
-/**
- * Fetch the current state of a verification job.
- *
- * Useful when the backend processes PDFs, images, or voice
- * asynchronously.
- */
-export async function getVerificationJob(
-  jobId: string,
-): Promise<VerificationJob> {
-  const response = await request
-```

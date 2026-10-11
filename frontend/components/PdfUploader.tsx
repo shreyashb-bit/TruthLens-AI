@@ -1,4 +1,3 @@
-```tsx id="d4kz8p"
 "use client";
 
 import {
@@ -175,5 +174,15 @@ export default function PdfUploader({
               <button
                 type="button"
                 onClick={handleRemove}
-                aria-l
-```
+                aria-label="Remove selected PDF"
+                className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+              >
+                <X size={18} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

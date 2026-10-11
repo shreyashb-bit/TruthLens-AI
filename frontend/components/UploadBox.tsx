@@ -1,4 +1,3 @@
-```tsx
 "use client";
 
 import {
@@ -334,4 +333,3 @@ export default function UploadBox({
     </div>
   );
 }
-```

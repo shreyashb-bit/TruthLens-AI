@@ -1,4 +1,3 @@
-```ts
 import {
   FileCheck2,
   FileText,
@@ -232,4 +231,3 @@ export const BRAND = {
   icon: ShieldCheck,
   primaryColor: "#2563eb",
 };
-```

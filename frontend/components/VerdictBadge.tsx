@@ -1,4 +1,3 @@
-```tsx
 "use client";
 
 import {
@@ -146,4 +145,3 @@ export default function VerdictBadge({
     </span>
   );
 }
-```

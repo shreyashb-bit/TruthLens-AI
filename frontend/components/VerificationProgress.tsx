@@ -1,4 +1,3 @@
-```tsx id="h4q1kp"
 "use client";
 
 import {
@@ -300,4 +299,3 @@ export default function VerificationProgress({
     </section>
   );
 }
-```

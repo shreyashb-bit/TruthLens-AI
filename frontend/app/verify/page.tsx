@@ -14,6 +14,8 @@ import {
   ShieldCheck,
   Upload,
 } from "lucide-react";
+import { submitVerification, ApiError } from "@/lib/api";
+import type { VerificationRequest } from "@/types/verification";
 
 type VerificationMode = "text" | "url" | "pdf" | "image" | "voice";
 
@@ -51,6 +53,7 @@ export default function VerifyPage() {
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [error, setError] = useState("");
 
   const handleFileChange = (
     event: React.ChangeEvent<HTMLInputElement>
@@ -63,22 +66,23 @@ export default function VerifyPage() {
   };
 
   const handleVerify = async () => {
+    setError("");
     setIsVerifying(true);
-
-    /*
-      API integration will be connected here after
-      frontend/lib/api.ts is created.
-
-      Person 1 frontend should not directly modify
-      Person 3's AI verification files.
-    */
-
-    setTimeout(() => {
+    const request: VerificationRequest = {
+      type: mode,
+      ...(mode === "text" ? { text: claim } : {}),
+      ...(mode === "url" ? { url } : {}),
+      ...(file ? { file } : {}),
+    };
+    try {
+      const job = await submitVerification(request);
+      window.location.assign(`/results?id=${encodeURIComponent(job.id)}`);
+    } catch (submissionError) {
+      setError(submissionError instanceof ApiError
+        ? submissionError.message
+        : "Unable to submit this verification. Please try again.");
       setIsVerifying(false);
-
-      // Temporary navigation until API integration is connected.
-      window.location.href = "/results";
-    }, 1200);
+    }
   };
 
   const canVerify =
@@ -347,6 +351,11 @@ export default function VerifyPage() {
           </div>
 
           {/* Verify button */}
+          {error && (
+            <p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </p>
+          )}
           <button
             type="button"
             disabled={!canVerify || isVerifying}

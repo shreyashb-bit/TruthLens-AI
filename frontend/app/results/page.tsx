@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { getVerification } from "@/lib/api";
+import type { VerificationResult } from "@/types/verification";
 import {
   ArrowLeft,
   ArrowRight,
@@ -16,7 +19,7 @@ import {
 
 type Verdict = "TRUE" | "FALSE" | "MIXED" | "UNVERIFIED";
 
-const result = {
+const sampleResult = {
   verdict: "TRUE" as Verdict,
   confidence: 91,
   claim:
@@ -107,6 +110,58 @@ function getVerdictStyles(verdict: Verdict) {
 }
 
 export default function ResultsPage() {
+  const [result, setResult] = useState<typeof sampleResult | null>(null);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("id");
+    if (!id) {
+      setLoadError("No verification result was selected.");
+      return;
+    }
+
+    getVerification(id).then((saved: VerificationResult) => {
+      const verdict: Verdict = saved.verdict === "true" || saved.verdict === "mostly_true"
+        ? "TRUE"
+        : saved.verdict === "false" || saved.verdict === "misleading"
+          ? "FALSE"
+          : saved.verdict === "mixed" || saved.verdict === "partially_true"
+            ? "MIXED"
+            : "UNVERIFIED";
+      setResult({
+        verdict,
+        confidence: saved.confidence <= 1 ? Math.round(saved.confidence * 100) : Math.round(saved.confidence),
+        claim: saved.originalInput || saved.title || "Submitted content",
+        summary: saved.summary || "No analysis summary was returned by the backend.",
+        evidence: saved.evidence.map((item) => ({
+          title: item.title,
+          description: item.description,
+          relevance: Math.round(item.relevanceScore ?? 0),
+        })),
+        sources: saved.sources.map((source) => ({
+          name: source.name,
+          url: source.url,
+          type: source.domain || "Source",
+        })),
+      });
+    }).catch((error: unknown) => {
+      setLoadError(error instanceof Error ? error.message : "Unable to load this result.");
+    });
+  }, []);
+
+  if (!result) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-5 text-slate-900">
+        <section className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <ShieldCheck className="mx-auto text-blue-600" size={34} />
+          <h1 className="mt-4 text-2xl font-bold">{loadError ? "Result unavailable" : "Loading result…"}</h1>
+          {loadError && <p role="alert" className="mt-3 text-sm text-slate-600">{loadError}</p>}
+          {loadError && <Link href="/verify" className="mt-6 inline-flex rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white">Start a verification</Link>}
+        </section>
+      </main>
+    );
+  }
+
   const verdictStyle = getVerdictStyles(result.verdict);
   const VerdictIcon = verdictStyle.icon;
 

@@ -1,4 +1,3 @@
-```tsx
 "use client";
 
 import {
@@ -327,4 +326,3 @@ export default function VoiceUploader({
     </div>
   );
 }
-```

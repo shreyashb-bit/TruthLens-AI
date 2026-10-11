@@ -1,4 +1,3 @@
-```ts
 export type VerificationInputType =
   | "text"
   | "url"
@@ -33,8 +32,14 @@ export interface Evidence {
   id: string;
   title: string;
   description: string;
+  snippet?: string;
+  url?: string;
   sourceUrl?: string;
   sourceName?: string;
+  domain?: string;
+  relevance?: number;
+  relevanceReason?: string;
+  verified?: boolean;
   publishedAt?: string;
   relevanceScore?: number;
   supportsClaim?: boolean;
@@ -54,9 +59,12 @@ export interface Source {
 export interface Claim {
   id: string;
   text: string;
+  category?: string;
   verdict?: Verdict;
   confidence?: number;
   explanation?: string;
+  reasoning?: string;
+  evidenceSummary?: string;
   evidence?: Evidence[];
   sources?: Source[];
 }
@@ -101,4 +109,3 @@ export interface ApiResponse<T> {
   message?: string;
   error?: string;
 }
-```

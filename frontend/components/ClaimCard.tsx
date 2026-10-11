@@ -1,4 +1,3 @@
-```tsx
 "use client";
 
 import {
@@ -111,15 +110,15 @@ export default function ClaimCard({
     useState(defaultExpanded);
 
   const Icon =
-    verdictIcons[claim.verdict] ??
+    verdictIcons[claim.verdict ?? "unverified"] ??
     CircleHelp;
 
   const iconColor =
-    verdictIconColors[claim.verdict] ??
+    verdictIconColors[claim.verdict ?? "unverified"] ??
     "text-slate-500";
 
   const confidence =
-    normalizeConfidence(claim.confidence);
+    normalizeConfidence(claim.confidence ?? 0);
 
   const evidenceCount =
     claim.evidence?.length ?? 0;
@@ -145,7 +144,7 @@ export default function ClaimCard({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <VerdictBadge
-                verdict={claim.verdict}
+                verdict={claim.verdict ?? "unverified"}
               />
 
               {claim.category && (
@@ -312,7 +311,7 @@ export default function ClaimCard({
               </div>
 
               <div className="mt-3 space-y-2">
-                {claim.evidence
+                {(claim.evidence ?? [])
                   .slice(0, 3)
                   .map((evidence, evidenceIndex) => (
                     <div
@@ -437,4 +436,3 @@ export default function ClaimCard({
     </article>
   );
 }
-```

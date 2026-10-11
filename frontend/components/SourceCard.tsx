@@ -1,4 +1,3 @@
-```tsx
 "use client";
 
 import {
@@ -263,4 +262,3 @@ export default function SourceCard({
     </article>
   );
 }
-```
