@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from backend.app.config import get_db
-from backend.app.models.verification import Verification
-from backend.app.schemas.verification import (
+from app.config import get_db
+from app.models.verification import Verification
+from app.schemas.verification import (
     VerificationRequest,
     VerificationResponse
 )

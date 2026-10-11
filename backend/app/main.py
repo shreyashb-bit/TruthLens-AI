@@ -1,13 +1,13 @@
-from backend.app.config import engine
-from backend.app.models.user import Base
+from app.config import engine
+from app.models.user import Base
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.app.api.verify import router as verify_router
-from backend.app.api.health import router as health_router
-from backend.app.api.upload import router as upload_router
-from backend.app.api.history import router as history_router
+from app.api.verify import router as verify_router
+from app.api.health import router as health_router
+from app.api.upload import router as upload_router
+from app.api.history import router as history_router
 
 app = FastAPI(title="TruthCheck API")
 Base.metadata.create_all(bind=engine)

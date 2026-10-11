@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import relationship
 
-from backend.app.models.user import Base
+from app.models.user import Base
 
 
 class Claim(Base):
